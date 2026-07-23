@@ -1,10 +1,8 @@
 # Environment and secrets
 .env
 .env.*
-!.env.example
 backend/.env
 backend/.env.*
-!backend/.env.example
 
 # Python
 __pycache__/
@@ -14,6 +12,7 @@ __pycache__/
 .venv/
 venv/
 env/
+.env.example/
 ENV/
 pip-wheel-metadata/
 .pytest_cache/
