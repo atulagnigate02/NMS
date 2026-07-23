@@ -1,0 +1,423 @@
+{
+  "info": {
+    "name": "NMS Backend API",
+    "description": "Postman collection for the FastAPI NMS backend.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000/api/v1"
+    },
+    {
+      "key": "token",
+      "value": ""
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/health"
+      }
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.access_token) {",
+                  "  pm.collectionVariables.set('token', json.access_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@gmail.com\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/auth/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Organizations",
+      "item": [
+        {
+          "name": "Create Organization",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Demo Organization\",\n  \"description\": \"Primary NMS tenant\"\n}"
+            },
+            "url": "{{baseUrl}}/organizations"
+          }
+        },
+        {
+          "name": "List Organizations",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/organizations"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sites",
+      "item": [
+        {
+          "name": "Create Site",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organization_id\": 1,\n  \"name\": \"Head Office\",\n  \"city\": \"Delhi\",\n  \"state\": \"Delhi\",\n  \"latitude\": 28.6139,\n  \"longitude\": 77.2090\n}"
+            },
+            "url": "{{baseUrl}}/sites"
+          }
+        },
+        {
+          "name": "List Sites",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/sites"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Devices",
+      "item": [
+        {
+          "name": "Create Device",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"site_id\": 1,\n  \"hostname\": \"core-switch-01\",\n  \"ip_address\": \"192.168.1.10\",\n  \"vendor_id\": 1,\n  \"device_type_id\": 2,\n  \"model\": \"Catalyst\",\n  \"status\": \"online\",\n  \"monitoring_status\": true\n}"
+            },
+            "url": "{{baseUrl}}/devices"
+          }
+        },
+        {
+          "name": "List Devices",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/devices"
+          }
+        },
+        {
+          "name": "Disable Monitoring",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/devices/1/monitoring/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Discovery",
+      "item": [
+        {
+          "name": "Run Discovery",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"network_range\": \"192.168.100.0/24\",\n  \"site_id\": 1,\n  \"ports\": [22, 80, 443, 161, 162, 8080, 8443],\n  \"scan_icmp\": true,\n  \"scan_ports\": true,\n  \"scan_snmp\": true,\n  \"snmp_community\": \"public\",\n  \"timeout_ms\": 700,\n  \"max_hosts\": 254\n}"
+            },
+            "url": "{{baseUrl}}/discovery/run"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Metrics",
+      "item": [
+        {
+          "name": "Create Device Metric",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_id\": 1,\n  \"cpu_usage\": 45.5,\n  \"memory_usage\": 62.0,\n  \"latency\": 12.4,\n  \"packet_loss\": 0.1,\n  \"bandwidth_usage\": 70.2\n}"
+            },
+            "url": "{{baseUrl}}/device-metrics"
+          }
+        },
+        {
+          "name": "List Device Metrics",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/device-metrics?device_id=1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Alerts",
+      "item": [
+        {
+          "name": "Create Alert",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_id\": 1,\n  \"severity\": \"critical\",\n  \"title\": \"Device Down\",\n  \"description\": \"Core switch is unreachable\",\n  \"status\": \"open\"\n}"
+            },
+            "url": "{{baseUrl}}/alerts"
+          }
+        },
+        {
+          "name": "List Alerts",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/alerts"
+          }
+        },
+        {
+          "name": "Acknowledge Alert",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/alerts/1/acknowledge"
+          }
+        },
+        {
+          "name": "Resolve Alert",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/alerts/1/resolve"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Create User With Role",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Operator User\",\n  \"email\": \"operator@gmail.com\",\n  \"password\": \"operator123\",\n  \"role_id\": 2,\n  \"status\": \"active\"\n}"
+            },
+            "url": "{{baseUrl}}/users"
+          }
+        },
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/users"
+          }
+        },
+        {
+          "name": "Assign Role To User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role_id\": 3\n}"
+            },
+            "url": "{{baseUrl}}/users/2/role"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Roles",
+      "item": [
+        {
+          "name": "Create Role",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role_name\": \"Network Operator\"\n}"
+            },
+            "url": "{{baseUrl}}/roles"
+          }
+        },
+        {
+          "name": "List Roles",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/roles"
+          }
+        },
+        {
+          "name": "Get Role Permissions",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/roles/2/permissions"
+          }
+        },
+        {
+          "name": "Assign Permissions To Role",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permission_ids\": [1, 2, 3]\n}"
+            },
+            "url": "{{baseUrl}}/roles/2/permissions"
+          }
+        },
+        {
+          "name": "Add One Permission To Role",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/roles/2/permissions/1"
+          }
+        },
+        {
+          "name": "Remove One Permission From Role",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/roles/2/permissions/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Permissions",
+      "item": [
+        {
+          "name": "List Permissions",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/permissions"
+          }
+        },
+        {
+          "name": "List Device Permissions",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/permissions?module=devices"
+          }
+        },
+        {
+          "name": "Create Permission",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"topology:read\",\n  \"name\": \"Topology Read\",\n  \"module\": \"topology\",\n  \"action\": \"read\",\n  \"description\": \"Can view topology map\"\n}"
+            },
+            "url": "{{baseUrl}}/permissions"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/dashboard/summary"
+      }
+    }
+  ]
+}
