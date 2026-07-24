@@ -20,7 +20,9 @@ Copy-Item backend\.env.example backend\.env
 py -m backend.seed
 py -m uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 ```
-
+cd /d C:\Users\dell\Desktop\hardik\NMS
+call backend\.venv\Scripts\activate.bat
+python -m uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 Open API docs:
 
 ```text

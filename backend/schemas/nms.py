@@ -177,6 +177,7 @@ class DeviceTypeRead(DeviceTypeBase):
 
 class DeviceBase(BaseModel):
     site_id: int | None = None
+    device_name: str | None = None
     hostname: str
     ip_address: str
     mac_address: str | None = None
@@ -196,6 +197,7 @@ class DeviceCreate(DeviceBase):
 
 class DeviceUpdate(BaseModel):
     site_id: int | None = None
+    device_name: str | None = None
     hostname: str | None = None
     ip_address: str | None = None
     mac_address: str | None = None
@@ -396,6 +398,26 @@ class EventUpdate(BaseModel):
 class EventRead(EventBase):
     id: int
     timestamp: datetime
+    network_id: int | None = None
+    device_type_id: int | None = None
+    added_by: int | None = None
+    hostname: str | None = None
+    device_name: str | None = None
+    ip_address: str | None = None
+    ipv4: str | None = None
+    ipv6: str | None = None
+    mac_address: str | None = None
+    manufacturer: str | None = None
+    model: str | None = None
+    serial_number: str | None = None
+    firmware_version: str | None = None
+    os_version: str | None = None
+    status: str | None = None
+    location: str | None = None
+    last_seen: datetime | None = None
+    is_active: bool | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -471,7 +493,7 @@ class AuditLogRead(AuditLogBase):
 
 
 class DiscoveryRequest(BaseModel):
-    network_range: str
+    network_range: str | list[str]
     site_id: int | None = None
     ports: list[int] = Field(default_factory=lambda: [22, 80, 443, 161, 162, 8080, 8443])
     scan_icmp: bool = True

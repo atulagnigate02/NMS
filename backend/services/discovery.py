@@ -1,5 +1,6 @@
 import ipaddress
 import platform
+import re
 import socket
 import struct
 import subprocess
@@ -17,6 +18,8 @@ class DiscoveryResult:
     ip_address: str
     is_alive: bool
     open_ports: list[int]
+    hostname: str | None
+    mac_address: str | None
     snmp_name: str | None
     snmp_description: str | None
 
@@ -53,6 +56,38 @@ def scan_ports(ip_address: str, ports: list[int], timeout_ms: int) -> list[int]:
         if scan_port(ip_address, port, timeout_ms):
             open_ports.append(port)
     return open_ports
+
+
+def resolve_hostname(ip_address: str) -> str | None:
+    """Resolve the device hostname using the local DNS/reverse-DNS resolver."""
+    try:
+        hostname, _, _ = socket.gethostbyaddr(ip_address)
+    except (OSError, socket.herror):
+        return None
+    return hostname.rstrip(".") or None
+
+
+def get_mac_address(ip_address: str) -> str | None:
+    """Read the local ARP/neighbor table for a discovered host.
+
+    ARP data is only available for hosts on the local Layer-2 network. For
+    routed hosts this correctly returns None rather than inventing a value.
+    """
+    system = platform.system().lower()
+    if system == "windows":
+        command = ["arp", "-a", ip_address]
+    else:
+        command = ["ip", "neigh", "show", ip_address]
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=3)
+    except (subprocess.SubprocessError, OSError):
+        return None
+    if result.returncode != 0:
+        return None
+    match = re.search(r"(?i)([0-9a-f]{2}(?:[:-][0-9a-f]{2}){5})", result.stdout)
+    if not match:
+        return None
+    return match.group(1).replace("-", ":").lower()
 
 
 def _ber_length(length: int) -> bytes:
@@ -163,6 +198,8 @@ def discover_host(
 ) -> DiscoveryResult:
     is_alive = ping_host(ip_address, timeout_ms) if scan_icmp else False
     open_ports = scan_ports(ip_address, ports, timeout_ms) if scan_tcp_ports else []
+    hostname = resolve_hostname(ip_address)
+    mac_address = get_mac_address(ip_address)
     snmp_name = None
     snmp_description = None
     if scan_snmp:
@@ -172,6 +209,8 @@ def discover_host(
         ip_address=ip_address,
         is_alive=is_alive,
         open_ports=open_ports,
+        hostname=hostname,
+        mac_address=mac_address,
         snmp_name=snmp_name,
         snmp_description=snmp_description,
     )
@@ -206,6 +245,8 @@ def discover_network(
         ]
         for future in as_completed(futures):
             result = future.result()
-            if result.is_alive or result.open_ports or result.snmp_name or result.snmp_description:
+            # Local Wi-Fi devices may block ICMP and expose no TCP/SNMP port,
+            # but an ARP entry still proves they are present on the LAN.
+            if result.is_alive or result.open_ports or result.mac_address or result.snmp_name or result.snmp_description:
                 results.append(result)
-    return sorted(results, key=lambda item: ipaddress.ip_address(item.ip_address))
+    return sorted(results, key=lambda item: (ipaddress.ip_address(item.ip_address).version, int(ipaddress.ip_address(item.ip_address))))

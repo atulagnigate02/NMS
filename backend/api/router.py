@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from ipaddress import ip_address as parse_ip_address
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
@@ -99,6 +100,47 @@ router = APIRouter(prefix="/api/v1")
 def audit(db: Session, user_id: int | None, action: str, resource_name: str) -> None:
     db.add(AuditLog(user_id=user_id, action=action, resource_name=resource_name))
     db.commit()
+
+
+def event_response(event: Event) -> dict:
+    """Return an event together with the device fields shown in the events feed."""
+    device = event.device
+    response = {
+        "device_id": event.device_id,
+        "event_type": event.event_type,
+        "description": event.description,
+        "id": event.id,
+        "timestamp": event.timestamp,
+    }
+    if not device:
+        return response
+
+    ip = parse_ip_address(device.ip_address)
+    response.update(
+        {
+            "network_id": device.site_id,
+            "device_type_id": device.device_type_id,
+            "added_by": None,
+            "hostname": device.hostname,
+            "device_name": device.device_name,
+            "ip_address": device.ip_address,
+            "ipv4": device.ip_address if ip.version == 4 else None,
+            "ipv6": device.ip_address if ip.version == 6 else None,
+            "mac_address": device.mac_address,
+            "manufacturer": device.vendor.vendor_name if device.vendor else None,
+            "model": device.model,
+            "serial_number": device.serial_number,
+            "firmware_version": device.firmware_version,
+            "os_version": None,
+            "status": device.status,
+            "location": device.site.name if device.site else None,
+            "last_seen": device.last_seen,
+            "is_active": device.monitoring_status,
+            "created_at": device.created_at,
+            "updated_at": None,
+        }
+    )
+    return response
 
 
 @router.get("/health")
@@ -666,24 +708,25 @@ def resolve_alert(item_id: int, db: Session = Depends(get_db), current_user: Use
 
 @router.get("/events", response_model=list[EventRead])
 def list_events(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(Event).order_by(Event.timestamp.desc()).offset(skip).limit(min(limit, 500)).all()
+    events = db.query(Event).order_by(Event.timestamp.desc()).offset(skip).limit(min(limit, 500)).all()
+    return [event_response(event) for event in events]
 
 
 @router.get("/events/{item_id}", response_model=EventRead)
 def get_event(item_id: int, db: Session = Depends(get_db)):
-    return event_crud.get(db, item_id)
+    return event_response(event_crud.get(db, item_id))
 
 
 @router.post("/events", response_model=EventRead, status_code=status.HTTP_201_CREATED)
 def create_event(payload: EventCreate, db: Session = Depends(get_db)):
-    return event_crud.create(db, payload)
+    return event_response(event_crud.create(db, payload))
 
 
 @router.patch("/events/{item_id}", response_model=EventRead)
 def update_event(item_id: int, payload: EventUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     item = event_crud.update(db, item_id, payload)
     audit(db, current_user.id, "UPDATE", "events")
-    return item
+    return event_response(item)
 
 
 @router.delete("/events/{item_id}")
@@ -795,23 +838,30 @@ def run_discovery(payload: DiscoveryRequest, db: Session = Depends(get_db), curr
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="max_hosts must be between 1 and 1024")
     if payload.timeout_ms < 100 or payload.timeout_ms > 5000:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="timeout_ms must be between 100 and 5000")
-    scan_results = discover_network(
-        network_range=payload.network_range,
-        ports=payload.ports,
-        timeout_ms=payload.timeout_ms,
-        snmp_community=payload.snmp_community,
-        scan_icmp=payload.scan_icmp,
-        scan_tcp_ports=payload.scan_ports,
-        scan_snmp=payload.scan_snmp,
-        max_hosts=payload.max_hosts,
-    )
+    network_ranges = [payload.network_range] if isinstance(payload.network_range, str) else payload.network_range
+    scan_results = []
+    for network_range in network_ranges:
+        scan_results.extend(
+            discover_network(
+                network_range=network_range,
+                ports=payload.ports,
+                timeout_ms=payload.timeout_ms,
+                snmp_community=payload.snmp_community,
+                scan_icmp=payload.scan_icmp,
+                scan_tcp_ports=payload.scan_ports,
+                scan_snmp=payload.scan_snmp,
+                max_hosts=payload.max_hosts,
+            )
+        )
     discovered = []
     for result in scan_results:
         existing = db.query(Device).filter(Device.ip_address == result.ip_address).first()
-        hostname = result.snmp_name or f"device-{result.ip_address.replace('.', '-')}"
+        hostname = result.snmp_name or result.hostname or f"device-{result.ip_address.replace('.', '-').replace(':', '-')}"
         description = result.snmp_description or f"Open ports: {', '.join(str(port) for port in result.open_ports) or 'none'}"
         if existing:
-            existing.hostname = result.snmp_name or existing.hostname
+            existing.device_name = result.snmp_name or result.hostname or existing.device_name or existing.hostname
+            existing.hostname = result.snmp_name or result.hostname or existing.hostname
+            existing.mac_address = result.mac_address or existing.mac_address
             existing.status = "online"
             existing.last_seen = datetime.utcnow()
             existing.model = result.snmp_description or existing.model
@@ -820,8 +870,10 @@ def run_discovery(payload: DiscoveryRequest, db: Session = Depends(get_db), curr
             continue
         device = Device(
             site_id=payload.site_id,
+            device_name=hostname,
             hostname=hostname,
             ip_address=result.ip_address,
+            mac_address=result.mac_address,
             model=result.snmp_description,
             status="online",
             monitoring_status=True,

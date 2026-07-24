@@ -116,6 +116,7 @@ class Device(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     site_id: Mapped[int | None] = mapped_column(ForeignKey("sites.id"), nullable=True)
+    device_name: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
     hostname: Mapped[str] = mapped_column(String(160), index=True)
     ip_address: Mapped[str] = mapped_column(String(45), unique=True, index=True)
     mac_address: Mapped[str | None] = mapped_column(String(32), nullable=True)

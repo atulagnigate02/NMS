@@ -27,9 +27,7 @@ from backend.models import (
 from backend.utils.crypto import encrypt_secret
 
 
-ROLES = ["Super Admin", "Admin", "Operator", "Viewer"]
-VENDORS = ["Cisco", "Fortinet", "Juniper", "HP", "Dell", "Mikrotik", "Sophos", "Palo Alto", "AGNIGATE"]
-DEVICE_TYPES = ["Router", "Switch", "Firewall", "Server", "UPS", "Storage", "Access Point", "Gateway"]
+ROLES = ["Super Admin"]
 DEMO_DEVICES = [
     {
         "hostname": "core-router-01",
@@ -303,23 +301,6 @@ def seed() -> None:
     try:
         for role_name in ROLES:
             get_or_create(db, Role, {"role_name": role_name})
-        for vendor_name in VENDORS:
-            get_or_create(db, Vendor, {"vendor_name": vendor_name})
-        for name in DEVICE_TYPES:
-            get_or_create(db, DeviceType, {"name": name})
-        organization = get_or_create(
-            db,
-            Organization,
-            {"name": "Default Organization"},
-            {"description": "Default tenant for local NMS testing."},
-        )
-        site = get_or_create(
-            db,
-            Site,
-            {"organization_id": organization.id, "name": "Default Site"},
-            {"city": "Local", "state": "Local"},
-        )
-
         super_admin = db.query(Role).filter(Role.role_name == "Super Admin").first()
         all_permissions = []
         for module in MODULES:
@@ -340,44 +321,6 @@ def seed() -> None:
                 all_permissions.append(permission)
         if super_admin:
             super_admin.permissions = all_permissions
-        role_permissions_for(
-            db,
-            "Admin",
-            [permission.code for permission in all_permissions if permission.module != "audit_logs"],
-        )
-        role_permissions_for(
-            db,
-            "Operator",
-            [
-                "dashboard:read",
-                "devices:read",
-                "devices:update",
-                "interfaces:read",
-                "monitoring_jobs:read",
-                "device_metrics:create",
-                "device_metrics:read",
-                "alerts:read",
-                "alerts:acknowledge",
-                "alerts:resolve",
-                "events:create",
-                "events:read",
-                "discovery:run",
-            ],
-        )
-        role_permissions_for(
-            db,
-            "Viewer",
-            [
-                "dashboard:read",
-                "devices:read",
-                "interfaces:read",
-                "device_metrics:read",
-                "alerts:read",
-                "events:read",
-                "reports:read",
-            ],
-        )
-
         admin_user = get_or_create(
             db,
             User,
@@ -389,11 +332,9 @@ def seed() -> None:
                 "status": "active",
             },
         )
-        seed_demo_users(db)
-        seed_thresholds(db)
-        devices = seed_demo_devices(db, site)
-        seed_device_children(db, devices)
-        seed_events_alerts_reports(db, devices, admin_user)
+        # Keep the seed deterministic and safe for a fresh installation:
+        # access-control records and the default admin are created here, while
+        # devices and monitoring data are created later by discovery.
         db.commit()
     finally:
         db.close()
