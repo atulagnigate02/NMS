@@ -1,5 +1,6 @@
 import ipaddress
 import platform
+import re
 import socket
 import struct
 import subprocess
@@ -19,6 +20,8 @@ class DiscoveryResult:
     open_ports: list[int]
     snmp_name: str | None
     snmp_description: str | None
+    mac_address: str | None = None
+    hostname: str | None = None
 
 
 def iter_hosts(network_range: str, max_hosts: int) -> list[str]:
@@ -53,6 +56,35 @@ def scan_ports(ip_address: str, ports: list[int], timeout_ms: int) -> list[int]:
         if scan_port(ip_address, port, timeout_ms):
             open_ports.append(port)
     return open_ports
+
+
+def build_arp_lookup() -> dict[str, str]:
+    try:
+        result = subprocess.run(["arp", "-a"], capture_output=True, text=True, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return {}
+
+    arp_lookup: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if not line or "Physical Address" in line or "Internet Address" in line:
+            continue
+        match = re.search(r"(\d+\.\d+\.\d+\.\d+)", line)
+        mac_match = re.search(r"([0-9A-Fa-f]{2}[-:][0-9A-Fa-f]{2}[-:][0-9A-Fa-f]{2}[-:][0-9A-Fa-f]{2}[-:][0-9A-Fa-f]{2}[-:][0-9A-Fa-f]{2})", line)
+        if not match or not mac_match:
+            continue
+        ip_address = match.group(1)
+        mac_address = mac_match.group(1).replace("-", ":").upper()
+        arp_lookup[ip_address] = mac_address
+    return arp_lookup
+
+
+def resolve_hostname(ip_address: str) -> str | None:
+    try:
+        host_info = socket.gethostbyaddr(ip_address)
+    except OSError:
+        return None
+    return host_info[0].split(".")[0] if host_info and host_info[0] else None
 
 
 def _ber_length(length: int) -> bytes:
@@ -160,20 +192,30 @@ def discover_host(
     scan_icmp: bool,
     scan_tcp_ports: bool,
     scan_snmp: bool,
+    mac_address: str | None = None,
 ) -> DiscoveryResult:
     is_alive = ping_host(ip_address, timeout_ms) if scan_icmp else False
     open_ports = scan_ports(ip_address, ports, timeout_ms) if scan_tcp_ports else []
     snmp_name = None
     snmp_description = None
+    hostname = resolve_hostname(ip_address)
     if scan_snmp:
         snmp_name = snmp_get(ip_address, snmp_community, SYS_NAME_OID, timeout_ms)
         snmp_description = snmp_get(ip_address, snmp_community, SYS_DESCR_OID, timeout_ms)
+
+    if open_ports:
+        is_alive = True
+    if snmp_name or snmp_description:
+        is_alive = True
+
     return DiscoveryResult(
         ip_address=ip_address,
         is_alive=is_alive,
         open_ports=open_ports,
         snmp_name=snmp_name,
         snmp_description=snmp_description,
+        mac_address=mac_address,
+        hostname=hostname,
     )
 
 
@@ -188,6 +230,7 @@ def discover_network(
     max_hosts: int,
 ) -> list[DiscoveryResult]:
     hosts = iter_hosts(network_range, max_hosts)
+    arp_lookup = build_arp_lookup()
     results: list[DiscoveryResult] = []
     workers = min(64, max(1, len(hosts)))
     with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -201,6 +244,7 @@ def discover_network(
                 scan_icmp,
                 scan_tcp_ports,
                 scan_snmp,
+                arp_lookup.get(host),
             )
             for host in hosts
         ]

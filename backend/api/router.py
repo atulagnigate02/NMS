@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from backend.auth.security import create_access_token, hash_password, verify_password
 from backend.database.session import get_db
@@ -666,12 +666,19 @@ def resolve_alert(item_id: int, db: Session = Depends(get_db), current_user: Use
 
 @router.get("/events", response_model=list[EventRead])
 def list_events(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(Event).order_by(Event.timestamp.desc()).offset(skip).limit(min(limit, 500)).all()
+    return (
+        db.query(Event)
+        .options(joinedload(Event.device))
+        .order_by(Event.timestamp.desc())
+        .offset(skip)
+        .limit(min(limit, 500))
+        .all()
+    )
 
 
 @router.get("/events/{item_id}", response_model=EventRead)
 def get_event(item_id: int, db: Session = Depends(get_db)):
-    return event_crud.get(db, item_id)
+    return db.query(Event).options(joinedload(Event.device)).filter(Event.id == item_id).first()
 
 
 @router.post("/events", response_model=EventRead, status_code=status.HTTP_201_CREATED)
@@ -808,13 +815,14 @@ def run_discovery(payload: DiscoveryRequest, db: Session = Depends(get_db), curr
     discovered = []
     for result in scan_results:
         existing = db.query(Device).filter(Device.ip_address == result.ip_address).first()
-        hostname = result.snmp_name or f"device-{result.ip_address.replace('.', '-')}"
+        hostname = result.snmp_name or result.hostname or f"device-{result.ip_address.replace('.', '-')}"
         description = result.snmp_description or f"Open ports: {', '.join(str(port) for port in result.open_ports) or 'none'}"
         if existing:
-            existing.hostname = result.snmp_name or existing.hostname
+            existing.hostname = result.snmp_name or result.hostname or existing.hostname
             existing.status = "online"
             existing.last_seen = datetime.utcnow()
             existing.model = result.snmp_description or existing.model
+            existing.mac_address = result.mac_address or existing.mac_address
             db.add(Event(device_id=existing.id, event_type="DISCOVERY_UPDATED", description=description))
             discovered.append(existing)
             continue
@@ -822,6 +830,7 @@ def run_discovery(payload: DiscoveryRequest, db: Session = Depends(get_db), curr
             site_id=payload.site_id,
             hostname=hostname,
             ip_address=result.ip_address,
+            mac_address=result.mac_address,
             model=result.snmp_description,
             status="online",
             monitoring_status=True,

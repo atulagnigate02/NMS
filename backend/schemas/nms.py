@@ -396,6 +396,7 @@ class EventUpdate(BaseModel):
 class EventRead(EventBase):
     id: int
     timestamp: datetime
+    device: DeviceRead | None = None
     model_config = ConfigDict(from_attributes=True)
 
 
