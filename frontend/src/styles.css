@@ -142,17 +142,26 @@ button, input, select { font: inherit; color: inherit; }
   align-items: center; 
   gap: 14px; 
   position: relative;
+  margin-top: 50px;
+}
+
+.sidebar:not(.collapsed) .sidebar-header {
+  margin-top: 0;
 }
 
 .sidebar-logo {
   max-width: 180px;
   height: auto;
   object-fit: contain;
-  transition: max-width 0.3s ease;
+  transition: max-width 0.3s ease, opacity 0.3s ease;
 }
 
 .sidebar.collapsed .sidebar-logo {
-  max-width: 50px;
+  display: none;
+}
+
+.sidebar.collapsed .sidebar-logo-fallback {
+  display: none;
 }
 
 .sidebar-logo-fallback {
@@ -163,9 +172,8 @@ button, input, select { font: inherit; color: inherit; }
 
 .collapse-toggle {
   position: absolute;
-  right: -12px;
-  top: 50%;
-  transform: translateY(-50%);
+  right: 12px;
+  top: 42px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 50%;
@@ -181,13 +189,14 @@ button, input, select { font: inherit; color: inherit; }
 }
 
 .collapse-toggle:hover {
-  background: var(--blue);
+  background: #d72323;
   color: white;
-  border-color: var(--blue);
+  border-color: #d72323;
 }
 
 .sidebar.collapsed .collapse-toggle {
-  right: -16px;
+  right: 50%;
+  transform: translateX(50%);
 }
 
 .brand-badge {
@@ -1589,6 +1598,73 @@ button, input, select { font: inherit; color: inherit; }
 .toggle-status.inactive {
   background: rgba(var(--red-rgb), 0.15);
   color: var(--red);
+}
+
+.monitoring-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.monitoring-stat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+}
+
+.monitoring-stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.monitoring-stat-value.monitoring-stat-small {
+  font-size: 1rem;
+}
+
+.monitoring-stat-label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.monitoring-table tbody tr.monitoring-row-clickable {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.monitoring-table tbody tr.monitoring-row-clickable:hover {
+  background: rgba(var(--primary-rgb, 59, 130, 246), 0.08);
+}
+
+.monitoring-table tbody tr.monitoring-row-disabled {
+  opacity: 0.7;
+}
+
+.monitoring-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.monitoring-back-link:hover {
+  color: var(--text);
+}
+
+.monitoring-history-time {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.monitoring-empty-history {
+  color: var(--muted);
+  padding: 8px 0;
 }
 
 .empty-icon { color: var(--muted); }

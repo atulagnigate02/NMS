@@ -17,6 +17,7 @@ const DeviceTypesPage = lazy(() => import("@/pages/DeviceTypesPage").then((m) =>
 const ThresholdsPage = lazy(() => import("@/pages/ThresholdsPage").then((m) => ({ default: m.ThresholdsPage })));
 const AuditLogsPage = lazy(() => import("@/pages/AuditLogsPage").then((m) => ({ default: m.AuditLogsPage })));
 const MonitoringPage = lazy(() => import("@/pages/MonitoringPage").then((m) => ({ default: m.MonitoringPage })));
+const MonitoringDetailPage = lazy(() => import("@/pages/MonitoringDetailPage").then((m) => ({ default: m.MonitoringDetailPage })));
 const pageTitles = {
   "/": "Dashboard",
   "/devices": "Devices",
@@ -30,7 +31,8 @@ const pageTitles = {
   "/device-types": "Device Types",
   "/thresholds": "Thresholds",
   "/audit-logs": "Audit Logs",
-  "/monitoring": "Device Monitoring"
+  "/monitoring": "Device Monitoring",
+  "/monitoring/:deviceId": "Device History"
 };
 function AppShell({ onLogout }) {
   const location = useLocation();
@@ -58,6 +60,7 @@ function AppShell({ onLogout }) {
               <Route path="/thresholds" element={<ThresholdsPage />} />
               <Route path="/audit-logs" element={<AuditLogsPage />} />
               <Route path="/monitoring" element={<MonitoringPage />} />
+              <Route path="/monitoring/:deviceId" element={<MonitoringDetailPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>

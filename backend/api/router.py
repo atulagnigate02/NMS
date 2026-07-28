@@ -13,6 +13,7 @@ from backend.models import (
     Device,
     DeviceCredential,
     DeviceMetric,
+    DeviceStatusHistory,
     DeviceType,
     Event,
     Interface,
@@ -42,6 +43,7 @@ from backend.schemas.nms import (
     DeviceMetricRead,
     DeviceMetricUpdate,
     DeviceRead,
+    DeviceStatusHistoryRead,
     DeviceTypeCreate,
     DeviceTypeRead,
     DeviceTypeUpdate,
@@ -54,6 +56,7 @@ from backend.schemas.nms import (
     InterfaceRead,
     InterfaceUpdate,
     LoginRequest,
+    MonitoringRunRequest,
     MonitoringJobCreate,
     MonitoringJobRead,
     MonitoringJobUpdate,
@@ -90,6 +93,7 @@ from backend.schemas.nms import (
     VendorUpdate,
 )
 from backend.services.discovery import discover_network
+from backend.services.monitoring import run_monitoring_check
 from backend.utils.crypto import encrypt_secret
 
 
@@ -463,6 +467,42 @@ def update_device(item_id: int, payload: DeviceUpdate, db: Session = Depends(get
     return item
 
 
+@router.get("/devices/{item_id}/status-history", response_model=list[DeviceStatusHistoryRead])
+def get_device_status_history(
+    item_id: int,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    device = db.get(Device, item_id)
+    if not device:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
+    return (
+        db.query(DeviceStatusHistory)
+        .filter(DeviceStatusHistory.device_id == item_id)
+        .order_by(DeviceStatusHistory.timestamp.desc())
+        .offset(skip)
+        .limit(min(limit, 500))
+        .all()
+    )
+
+
+@router.post("/monitoring/run", response_model=list[DeviceRead])
+def run_monitoring(
+    payload: MonitoringRunRequest | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    request = payload or MonitoringRunRequest()
+    if request.timeout_ms < 500 or request.timeout_ms > 10000:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="timeout_ms must be between 500 and 10000")
+    devices = run_monitoring_check(db, ip_addresses=request.ip_addresses, timeout_ms=request.timeout_ms)
+    audit(db, current_user.id, "RUN_MONITORING", f"{len(devices)} devices")
+    db.commit()
+    return devices
+
+
 @router.delete("/devices/{item_id}")
 def delete_device(item_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = device_crud.delete(db, item_id)
@@ -819,47 +859,68 @@ def dashboard_summary(db: Session = Depends(get_db)):
 
 @router.post("/discovery/run", response_model=list[DeviceRead], status_code=status.HTTP_201_CREATED)
 def run_discovery(payload: DiscoveryRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if payload.site_id and not db.get(Site, payload.site_id):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"site_id {payload.site_id} does not exist. Create a site first or send site_id as null.",
-        )
-    if payload.max_hosts < 1 or payload.max_hosts > 1024:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="max_hosts must be between 1 and 1024")
-    if payload.timeout_ms < 100 or payload.timeout_ms > 5000:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="timeout_ms must be between 100 and 5000")
-    scan_results = discover_network(
-        network_range=payload.network_range,
-        ports=payload.ports,
-        timeout_ms=payload.timeout_ms,
-        snmp_community=payload.snmp_community,
-        scan_icmp=payload.scan_icmp,
-        scan_tcp_ports=payload.scan_ports,
-        scan_snmp=payload.scan_snmp,
-        max_hosts=payload.max_hosts,
-    )
-    discovered = []
-    for result in scan_results:
-        hostname = result.snmp_name or result.hostname or f"device-{result.ip_address.replace('.', '-')}"
-        description = result.snmp_description or f"Open ports: {', '.join(str(port) for port in result.open_ports) or 'none'}"
+    try:
+        if payload.site_id and not db.get(Site, payload.site_id):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"site_id {payload.site_id} does not exist. Create a site first or send site_id as null.",
+            )
+        if payload.max_hosts < 1 or payload.max_hosts > 1024:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="max_hosts must be between 1 and 1024")
+        if payload.timeout_ms < 100 or payload.timeout_ms > 5000:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="timeout_ms must be between 100 and 5000")
         
-        # Always create new device, don't update existing
-        device = Device(
-            site_id=payload.site_id,
-            hostname=hostname,
-            ip_address=result.ip_address,
-            mac_address=result.mac_address,
-            model=result.snmp_description,
-            status="online",
-            monitoring_status=True,
-            last_seen=datetime.utcnow(),
+        print(f"Starting discovery for network: {payload.network_range}")
+        scan_results = discover_network(
+            network_range=payload.network_range,
+            ports=payload.ports,
+            timeout_ms=payload.timeout_ms,
+            snmp_community=payload.snmp_community,
+            scan_icmp=payload.scan_icmp,
+            scan_tcp_ports=payload.scan_ports,
+            scan_snmp=payload.scan_snmp,
+            max_hosts=payload.max_hosts,
         )
-        db.add(device)
-        db.flush()
-        db.add(Event(device_id=device.id, event_type="DISCOVERY_FOUND", description=description))
-        discovered.append(device)
-    db.commit()
-    for device in discovered:
-        db.refresh(device)
-    audit(db, current_user.id, "RUN_DISCOVERY", payload.network_range)
-    return discovered
+        print(f"Discovery found {len(scan_results)} hosts")
+        
+        discovered = []
+        for result in scan_results:
+            hostname = result.snmp_name or result.hostname or f"device-{result.ip_address.replace('.', '-')}"
+            description = result.snmp_description or f"Open ports: {', '.join(str(port) for port in result.open_ports) or 'none'}"
+
+            device = db.query(Device).filter(Device.ip_address == result.ip_address).first()
+            is_new = device is None
+            if is_new:
+                device = Device(ip_address=result.ip_address)
+                db.add(device)
+
+            device.hostname = hostname
+            if result.mac_address:
+                device.mac_address = result.mac_address
+            if result.snmp_description:
+                device.model = result.snmp_description
+            device.status = "online"
+            device.monitoring_status = True
+            device.last_seen = datetime.utcnow()
+            if payload.site_id is not None:
+                device.site_id = payload.site_id
+            device.deleted_at = None
+
+            db.flush()
+            event_type = "DISCOVERY_FOUND" if is_new else "DISCOVERY_UPDATED"
+            db.add(Event(device_id=device.id, event_type=event_type, description=description))
+            discovered.append(device)
+        db.commit()
+        for device in discovered:
+            db.refresh(device)
+        audit(db, current_user.id, "RUN_DISCOVERY", payload.network_range)
+        return discovered
+    except Exception as e:
+        db.rollback()
+        print(f"Discovery error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Discovery failed: {str(e)}"
+        )

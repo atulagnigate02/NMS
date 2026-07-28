@@ -68,6 +68,13 @@ export function Sidebar({ onLogout, isCollapsed, setIsCollapsed }) {
 
   return (
     <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
+      <button 
+        className="collapse-toggle"
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+      >
+        <Menu size={20} />
+      </button>
       <div className="sidebar-header">
         <img 
           src="/agnigate_logo.png" 
@@ -87,13 +94,6 @@ export function Sidebar({ onLogout, isCollapsed, setIsCollapsed }) {
             <p className="brand-subtitle">Enterprise Network Ops</p>
           </div>
         </div>
-        <button 
-          className="collapse-toggle"
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          <Menu size={20} />
-        </button>
       </div>
 
       <nav className="nav-menu" aria-label="Main navigation">

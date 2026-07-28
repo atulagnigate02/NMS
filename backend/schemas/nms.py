@@ -214,7 +214,25 @@ class DeviceUpdate(BaseModel):
 class DeviceRead(DeviceBase):
     id: int
     created_at: datetime
+    uptime_seconds: int = 0
+    downtime_seconds: int = 0
+    last_status_change: datetime | None = None
     model_config = ConfigDict(from_attributes=True)
+
+
+class DeviceStatusHistoryRead(BaseModel):
+    id: int
+    device_id: int
+    old_status: str | None
+    new_status: str
+    change_reason: str | None
+    timestamp: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MonitoringRunRequest(BaseModel):
+    ip_addresses: list[str] | None = None
+    timeout_ms: int = 2000
 
 
 class DeviceCredentialCreate(BaseModel):

@@ -34,6 +34,9 @@ export const api = {
     http.post(`/users/${userId}/role`, { role_id: roleId }).then((r) => r.data),
 
   listDevices: () => http.get('/devices').then((r) => r.data),
+  getDevice: (id) => http.get(`/devices/${id}`).then((r) => r.data),
+  getDeviceStatusHistory: (id) => http.get(`/devices/${id}/status-history`).then((r) => r.data),
+  runMonitoring: (payload = {}) => http.post('/monitoring/run', payload).then((r) => r.data),
   createDevice: (payload) => http.post('/devices', payload).then((r) => r.data),
   updateDevice: (id, payload) => http.patch(`/devices/${id}`, payload).then((r) => r.data),
   deleteDevice: (id) => http.delete(`/devices/${id}`),
