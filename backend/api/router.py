@@ -116,8 +116,34 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> Token:
 
 
 @router.get("/auth/me", response_model=UserRead)
-def me(current_user: User = Depends(get_current_user)) -> User:
-    return current_user
+def me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> User:
+    # Refresh user to get role relationship
+    db.refresh(current_user)
+    
+    # Get role name
+    role_name = None
+    if current_user.role:
+        role_name = current_user.role.role_name
+    
+    # Get permissions
+    permissions = []
+    if current_user.role:
+        permissions = [perm.code for perm in current_user.role.permissions]
+    
+    # Create response with additional fields
+    user_dict = {
+        "id": current_user.id,
+        "uuid": current_user.uuid,
+        "name": current_user.name,
+        "email": current_user.email,
+        "role_id": current_user.role_id,
+        "role_name": role_name,
+        "permissions": permissions,
+        "status": current_user.status,
+        "created_at": current_user.created_at
+    }
+    
+    return UserRead(**user_dict)
 
 
 role_crud = CRUDRouterMixin(Role)
@@ -814,18 +840,10 @@ def run_discovery(payload: DiscoveryRequest, db: Session = Depends(get_db), curr
     )
     discovered = []
     for result in scan_results:
-        existing = db.query(Device).filter(Device.ip_address == result.ip_address).first()
         hostname = result.snmp_name or result.hostname or f"device-{result.ip_address.replace('.', '-')}"
         description = result.snmp_description or f"Open ports: {', '.join(str(port) for port in result.open_ports) or 'none'}"
-        if existing:
-            existing.hostname = result.snmp_name or result.hostname or existing.hostname
-            existing.status = "online"
-            existing.last_seen = datetime.utcnow()
-            existing.model = result.snmp_description or existing.model
-            existing.mac_address = result.mac_address or existing.mac_address
-            db.add(Event(device_id=existing.id, event_type="DISCOVERY_UPDATED", description=description))
-            discovered.append(existing)
-            continue
+        
+        # Always create new device, don't update existing
         device = Device(
             site_id=payload.site_id,
             hostname=hostname,

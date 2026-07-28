@@ -73,6 +73,7 @@ class Organization(Base):
     name: Mapped[str] = mapped_column(String(160), unique=True, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
 
     sites: Mapped[list["Site"]] = relationship(back_populates="organization", cascade="all, delete-orphan")
 
@@ -87,6 +88,7 @@ class Site(Base):
     state: Mapped[str | None] = mapped_column(String(100), nullable=True)
     latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
 
     organization: Mapped[Organization] = relationship(back_populates="sites")
     devices: Mapped[list["Device"]] = relationship(back_populates="site")
@@ -97,6 +99,7 @@ class Vendor(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     vendor_name: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
 
     devices: Mapped[list["Device"]] = relationship(back_populates="vendor")
 
@@ -106,6 +109,7 @@ class DeviceType(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
 
     devices: Mapped[list["Device"]] = relationship(back_populates="device_type")
     thresholds: Mapped[list["Threshold"]] = relationship(back_populates="device_type")
@@ -128,6 +132,10 @@ class Device(Base):
     monitoring_status: Mapped[bool] = mapped_column(Boolean, default=True)
     last_seen: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    uptime_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    downtime_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    last_status_change: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
 
     site: Mapped[Site | None] = relationship(back_populates="devices")
     vendor: Mapped[Vendor | None] = relationship(back_populates="devices")
@@ -138,6 +146,7 @@ class Device(Base):
     alerts: Mapped[list["Alert"]] = relationship(back_populates="device", cascade="all, delete-orphan")
     events: Mapped[list["Event"]] = relationship(back_populates="device", cascade="all, delete-orphan")
     monitoring_jobs: Mapped[list["MonitoringJob"]] = relationship(back_populates="device", cascade="all, delete-orphan")
+    status_history: Mapped[list["DeviceStatusHistory"]] = relationship(back_populates="device", cascade="all, delete-orphan")
 
 
 class DeviceCredential(Base):
@@ -208,6 +217,7 @@ class Threshold(Base):
     metric_name: Mapped[str] = mapped_column(String(80), index=True)
     warning_value: Mapped[float] = mapped_column(Float)
     critical_value: Mapped[float] = mapped_column(Float)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
 
     device_type: Mapped[DeviceType | None] = relationship(back_populates="thresholds")
 
@@ -224,6 +234,7 @@ class Alert(Base):
     acknowledged_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
 
     device: Mapped[Device | None] = relationship(back_populates="alerts")
     acknowledged_user: Mapped[User | None] = relationship(back_populates="alerts_acknowledged")
@@ -238,6 +249,7 @@ class Event(Base):
     event_type: Mapped[str] = mapped_column(String(80), index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
 
     device: Mapped[Device | None] = relationship(back_populates="events")
 
@@ -264,6 +276,7 @@ class Report(Base):
     generated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     generated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
 
     generated_user: Mapped[User | None] = relationship(back_populates="reports")
 
@@ -278,3 +291,16 @@ class AuditLog(Base):
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     user: Mapped[User | None] = relationship(back_populates="audit_logs")
+
+
+class DeviceStatusHistory(Base):
+    __tablename__ = "device_status_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    device_id: Mapped[int] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"))
+    old_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    new_status: Mapped[str] = mapped_column(String(30))
+    change_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
+
+    device: Mapped[Device] = relationship(back_populates="status_history")

@@ -89,6 +89,8 @@ class UserRead(BaseModel):
     name: str
     email: EmailStr
     role_id: int | None
+    role_name: str | None = None
+    permissions: list[str] = []
     status: str
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)

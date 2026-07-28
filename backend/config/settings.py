@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     secret_key: str = "change-this-secret-key"
     access_token_expire_minutes: int = 1440
     credential_encryption_key: str | None = None
-    backend_cors_origins: str = "http://localhost:3000,http://localhost:5173"
+    backend_cors_origins: str = "http://localhost:3000,http://localhost:5173,http://localhost:5174"
 
     model_config = SettingsConfigDict(
         env_file=("backend/.env", ".env"),
